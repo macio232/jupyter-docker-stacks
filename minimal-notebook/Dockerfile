@@ -7,7 +7,13 @@ MAINTAINER Matt Edwards <matted@mit.edu>
 USER root
 
 # Install all OS dependencies for fully functional notebook server
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND noninteractive \
+    MYSQL_USER=mysql \
+    MYSQL_VERSION=5.7.24 \
+    MYSQL_DATA_DIR=/var/lib/mysql \
+    MYSQL_RUN_DIR=/run/mysqld \
+    MYSQL_LOG_DIR=/var/log/mysql
+
 RUN apt-get update && apt-get install -yq --no-install-recommends \
     git \
     vim \
@@ -22,8 +28,12 @@ RUN apt-get update && apt-get install -yq --no-install-recommends \
     sudo \
     locales \
     libxrender1 \
+    mysql-server=${MYSQL_VERSION}* \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+    
+COPY entrypoint.sh /sbin/entrypoint.sh
+
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
     locale-gen
 
@@ -32,6 +42,8 @@ RUN wget --quiet https://github.com/krallin/tini/releases/download/v0.6.0/tini &
     echo "d5ed732199c36a1189320e6c4859f0169e950692f451c03e7854243b95f4234b *tini" | sha256sum -c - && \
     mv tini /usr/local/bin/tini && \
     chmod +x /usr/local/bin/tini
+    
+RUN chmod 755 /sbin/entrypoint.sh
 
 # Configure environment
 ENV CONDA_DIR /opt/conda
@@ -73,9 +85,10 @@ USER root
 
 # Configure container startup as root
 EXPOSE 8888
+EXPOSE 3306/tcp
 WORKDIR /home/$NB_USER/work
-ENTRYPOINT ["tini", "--"]
-CMD ["start-notebook.sh"]
+ENTRYPOINT ["tini", "--", "/sbin/entrypoint.sh"]
+CMD ["start-notebook.sh","/usr/bin/mysqld_safe"]
 
 # Add local files as late as possible to avoid cache busting
 COPY start-notebook.sh /usr/local/bin/
